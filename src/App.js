@@ -98,8 +98,14 @@ function App() {
 
         {/* Camera view */}
         {useCamera && (
-          <div>
-            <video ref={videoRef} width="640" height="480"></video>
+          <div className="flex-container">
+            <video
+              ref={videoRef}
+              width="100%"  // Adjust to fit mobile screen
+              height="auto"
+              playsInline
+              autoPlay
+            ></video>
             <button onClick={captureImage}>Capture Image</button>
             <button onClick={stopCamera}>Cancel</button>
           </div>

@@ -104,3 +104,28 @@ canvas {
     padding: 10px 16px;
   }
 }
+
+/* Prevent the video from going fullscreen on iOS */
+video {
+  width: 100%; /* Responsive video */
+  max-width: 100%; /* Don't exceed container width */
+  height: auto;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional shadow for a clean look */
+}
+
+button {
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  margin: 10px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: block;
+  width: 100%; /* Make the buttons full width for mobile */
+}
+
