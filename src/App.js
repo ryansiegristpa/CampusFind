@@ -61,6 +61,10 @@ function App() {
     // Detect labels for the user-uploaded image and compare with reference images in S3
     const matchFound = await compareWithAllAdminImages(file);
     
+    // Detect labels and store them for demo purposes
+    const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
+    setDetectedLabels(userLabels);
+
     if (!matchFound) {
       alert("No match found.");  // Show alert if no match is found
       setImage(null);  // Clear the uploaded image after no match is found
@@ -116,9 +120,6 @@ function App() {
           if (compareLabels(userLabels, adminLabels)) {
             console.log("Labels match with:", adminImageKey);
             
-            // Store the labels detected for the user-uploaded image
-            setDetectedLabels(userLabels);
-
             // If a match is found, fetch the item details from DynamoDB
             await fetchMatchedItemDetails(adminImageKey);
             matchFound = true;  // Set the flag to true
@@ -288,8 +289,16 @@ function App() {
     setAdminMode(!adminMode);
   };
 
+  // Reset the match result and labels when returning to main menu
+  const handleReturnToMainMenu = () => {
+    setMatch(null);
+    setImage(null);
+    setMatchedItemDetails(null);
+  };
+
   return (
     <div className="App">
+      <img src="/images/hawkfind-logo.png" alt="HawkFind Logo" className="logo" />
       <h1>Lost and Found</h1>
 
       <div>
@@ -370,9 +379,14 @@ function App() {
             <img src={matchedItemDetails.imageUrl} alt="Matched Item" width="300" />
             <h3>Your uploaded item:</h3>
             <img src={image} alt="Uploaded" width="300" />
-            
-            {/* Display detected labels */}
-            <h3>Detected Labels:</h3>
+            <button onClick={handleReturnToMainMenu}>Return to Main Menu</button>
+          </div>
+        )}
+
+        {/* Display detected labels below the main buttons */}
+        {detectedLabels.length > 0 && (
+          <div>
+            <h3>Detected Labels (Previous Upload):</h3>
             <ul>
               {detectedLabels.map((label, index) => (
                 <li key={index}>{label}</li>
