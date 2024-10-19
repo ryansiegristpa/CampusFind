@@ -46,13 +46,31 @@ function App() {
   // Start the device camera
   const startCamera = () => {
     setUseCamera(true);
-    navigator.mediaDevices.getUserMedia({ video: true })
+    const constraints = {
+      video: {
+        facingMode: { exact: 'environment' } // Request the back camera
+      }
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
       .then((stream) => {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       })
       .catch((err) => {
         console.error("Error accessing the camera: ", err);
+        // Fallback to the front camera if the back camera is not available
+        const fallbackConstraints = {
+          video: true
+        };
+        navigator.mediaDevices.getUserMedia(fallbackConstraints)
+          .then((stream) => {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play();
+          })
+          .catch((fallbackErr) => {
+            console.error("Error accessing the front camera as fallback: ", fallbackErr);
+          });
       });
   };
 
