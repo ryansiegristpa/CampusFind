@@ -1,26 +1,106 @@
+/* Global styling */
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f4f4f9;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
 .App {
   text-align: center;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 2rem;
-  font-family: Arial, sans-serif;
+  max-width: 400px;
+  width: 100%;
+}
+
+h1 {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 1.5rem;
 }
 
 button {
-  margin: 1rem;
-  padding: 0.5rem 1rem;
-  font-size: 16px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  margin: 10px;
+  border-radius: 8px;
+  font-size: 1rem;
   cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+button:focus {
+  outline: none;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+/* Loading and Match styling */
+p {
+  font-size: 1rem;
+  color: #666;
 }
 
 img {
-  margin: 1rem 0;
-  border: 1px solid #ccc;
-}
-
-video {
-  margin: 1rem 0;
-  border: 1px solid #ccc;
+  max-width: 100%;
+  border-radius: 8px;
+  margin-top: 1rem;
 }
 
 h2 {
-  color: green;
+  color: #28a745;
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* Center the camera and buttons */
+video {
+  margin: 1rem 0;
+  border-radius: 8px;
+  max-width: 100%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+canvas {
+  display: none;
+}
+
+/* Flexbox for alignment */
+.flex-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Styling for mobile responsiveness */
+@media (max-width: 768px) {
+  .App {
+    padding: 1rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  button {
+    font-size: 0.9rem;
+    padding: 10px 16px;
+  }
 }
