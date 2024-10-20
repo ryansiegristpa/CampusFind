@@ -50,7 +50,6 @@ body {
   margin-bottom: 10px;
 }
 
-
 /* Heading styling */
 h1 {
   font-family: 'Poppins', sans-serif;
@@ -147,7 +146,9 @@ canvas {
 @media (max-width: 768px) {
   .App {
     padding: 1rem;
-    margin: 0 1rem;  /* Add horizontal margin to prevent overflow */
+    width: 100%;
+    margin-left: auto;   /* Ensures the app is centered on mobile */
+    margin-right: auto;  /* Ensures the app is centered on mobile */
   }
 
   h1 {
