@@ -238,3 +238,16 @@ img.uploaded-image {
   border-radius: 8px;
   margin-top: 1rem;
 }
+
+/* Map Container Styling */
+.map-container {
+  margin-top: 2rem;  /* Add spacing between the matched details and the map */
+  text-align: center;
+}
+
+.map-image {
+  max-width: 100%;  /* Ensure the map image doesn't overflow */
+  border-radius: 8px;  /* Add rounded corners to the map */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);  /* Add a subtle shadow */
+}
+

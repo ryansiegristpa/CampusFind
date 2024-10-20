@@ -108,25 +108,27 @@ function App() {
   };
 
   // Function to capture image (used for both user and admin)
-  const captureImage = () => {
-    if (!videoRef.current) return;
+const captureImage = () => {
+  if (!videoRef.current) return;
 
-    const context = canvasRef.current.getContext('2d');
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    
-    context.drawImage(videoRef.current, 0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight);
-    const capturedImage = canvasRef.current.toDataURL('image/jpeg');  // Ensure correct format
+  const context = canvasRef.current.getContext('2d');
+  canvasRef.current.width = videoRef.current.videoWidth;
+  canvasRef.current.height = videoRef.current.videoHeight;
+  
+  context.drawImage(videoRef.current, 0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight);
+  const capturedImage = canvasRef.current.toDataURL('image/jpeg');  // Ensure correct format
 
-    if (isAdminCamera) {
-      setNewItem({ ...newItem, image: capturedImage });
-    } else {
-      setImage(capturedImage);
-      setCapturedFromCamera(true);  // Track that the image was captured from the camera
-    }
+  if (isAdminCamera) {
+    setNewItem(prevState => ({ ...prevState, image: capturedImage }));  // Correctly set newItem image
+  } else {
+    setImage(capturedImage);
+  }
+  setCapturedFromCamera(true);  // Track that the image was captured from the camera
 
-    stopCamera();
-  };
+  stopCamera();  // Stop the camera after capture
+};
+
+  
 
   // Function to submit the captured image (acts like uploading the image)
   const submitCapturedImage = async () => {
@@ -346,6 +348,34 @@ console.log("Access Key:", process.env.REACT_APP_AWS_ACCESS_KEY_ID);
     return commonLabels.length > 0;  // Return true if there's at least one matching label
   };
 
+// Function to submit the admin-captured image
+const submitAdminCapturedImage = async () => {
+  setLoading(true);  // Show "Processing..."
+
+  try {
+    // Convert dataURL to a blob (image from camera)
+    const response = await fetch(newItem.image);
+    const blob = await response.blob();
+
+    // Create a file from the blob
+    const file = new File([blob], "admin-captured-image.jpg", { type: "image/jpeg" });
+
+    // Upload the captured image to S3
+    await uploadAdminImageToS3(file);
+
+    // Handle any additional admin-specific logic here
+
+    alert("Admin image submitted successfully!");  // Only one alert for admin submission
+  } catch (error) {
+    console.error("Error processing admin image:", error);
+    alert("An error occurred while processing the admin image.");
+  } finally {
+    setLoading(false);  // Hide "Processing..." when done
+  }
+};
+
+
+
   // Function to fetch matched item details from DynamoDB
   const fetchMatchedItemDetails = async (matchedItemID) => {
     const itemParams = {
@@ -379,12 +409,21 @@ console.log("Access Key:", process.env.REACT_APP_AWS_ACCESS_KEY_ID);
   };
 
   // Toggle Admin/User mode
-  const toggleAdminMode = () => {
-    setAdminMode(!adminMode);
-    setIsCameraActive(false);
-    setIsAdminCamera(false);
-    stopCamera();
-  };
+  // Toggle Admin/User mode
+const toggleAdminMode = () => {
+  if (adminMode) {
+    // Switching from Admin to User mode, so reset the captured images
+    setNewItem({ ...newItem, image: null });  // Clear admin captured image
+    setImage(null);  // Clear user image
+    setCapturedFromCamera(false);  // Reset captured from camera flag
+  }
+  
+  setAdminMode(!adminMode);
+  setIsCameraActive(false);
+  setIsAdminCamera(false);
+  stopCamera();
+};
+
 
   // Handle starting the camera for user
   const handleUserCamera = () => {
@@ -465,24 +504,42 @@ console.log("Access Key:", process.env.REACT_APP_AWS_ACCESS_KEY_ID);
           </div>
         )}
 
-        {isCameraActive && (
-          <div className="flex-container">
-            <video ref={videoRef} width="100%" height="auto" playsInline autoPlay></video>
-            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-            <button onClick={captureImage}>Capture Image</button>
-            <button onClick={stopCamera}>Cancel</button>
-          </div>
-        )}
+{isCameraActive && (
+  <div className="flex-container">
+    <video ref={videoRef} width="100%" height="auto" playsInline autoPlay></video>
+    <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+    <button onClick={captureImage}>Capture Image</button>
+    <button onClick={stopCamera}>Cancel</button>
+  </div>
+)}
 
-        {/* Show captured image and buttons if captured from camera */}
-        {capturedFromCamera && (
-          <div>
-            <h3>Captured Image:</h3>
-            <img src={image} alt="Captured" width="300" />
-            <button onClick={submitCapturedImage}>Submit Image</button>
-            <button onClick={retakeImage}>Retake Image</button>
-          </div>
-        )}
+{/* Show captured image and buttons for either user or admin mode */}
+{capturedFromCamera && (
+  <div>
+    <h3>Captured Image:</h3>
+    <img
+      src={isAdminCamera ? newItem.image : image}  // Display the correct image for admin or user
+      alt="Captured"
+      width="300"
+    />
+    
+    {isAdminCamera ? (
+      // Admin mode actions
+      <>
+        <button onClick={submitAdminCapturedImage}>Submit Admin Image</button>
+        <button onClick={retakeImage}>Retake Image</button>
+      </>
+    ) : (
+      // User mode actions
+      <>
+        <button onClick={submitCapturedImage}>Submit User Image</button>
+        <button onClick={retakeImage}>Retake Image</button>
+      </>
+    )}
+  </div>
+)}
+
+
 
         {loading && <p>Processing...</p>}
 
@@ -495,16 +552,25 @@ console.log("Access Key:", process.env.REACT_APP_AWS_ACCESS_KEY_ID);
               </div>
             )}
 
-            {match && matchedItemDetails && (
-              <div>
-                <h2>Item Found!</h2>
-                <p><strong>Name:</strong> {matchedItemDetails.name}</p>
-                <p><strong>Location:</strong> {matchedItemDetails.location}</p>
-                <p><strong>Description:</strong> {matchedItemDetails.description}</p>
-                <img src={matchedItemDetails.imageUrl} alt="Matched Item" width="300" />
-                <button onClick={handleReturnToMainMenu}>Return to Main Menu</button>
+          {match && matchedItemDetails && (
+            <div>
+              <h2>Item Found!</h2>
+              <h2>75% match</h2>
+              <p><strong>Name:</strong> {matchedItemDetails.name}</p>
+              <p><strong>Location:</strong> {matchedItemDetails.location}</p>
+              <p><strong>Description:</strong> {matchedItemDetails.description}</p>
+              <img src={matchedItemDetails.imageUrl} alt="Matched Item" width="300" />
+
+              {/* Placeholder map image */}
+              <div className="map-container">
+                <h3>Location on Map</h3>
+                <img src="/images/map.png" alt="Map Placeholder" className="map-image" />
               </div>
-            )}
+
+              <button onClick={handleReturnToMainMenu}>Return to Main Menu</button>
+            </div>
+          )}
+
           </>
         )}
 
