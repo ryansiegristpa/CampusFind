@@ -130,6 +130,9 @@ function App() {
 
   // Function to submit the captured image (acts like uploading the image)
   const submitCapturedImage = async () => {
+    console.log("Region:", process.env.REACT_APP_AWS_REGION);
+console.log("Access Key:", process.env.REACT_APP_AWS_ACCESS_KEY_ID);
+
     setLoading(true);  // Show "Processing..."
     setMatch(null);    // Reset previous match result
     setDetectedLabels([]);  // Clear previous labels
