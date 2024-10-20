@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import { S3Client, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { RekognitionClient, DetectLabelsCommand } from "@aws-sdk/client-rekognition";
@@ -34,191 +34,209 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [match, setMatch] = useState(null);  // Match result
   const [detectedLabels, setDetectedLabels] = useState([]);  // Store Rekognition labels
-  const [useCamera, setUseCamera] = useState(false);
   const [adminMode, setAdminMode] = useState(false);  // Admin mode toggle
   const [newItem, setNewItem] = useState({ name: '', location: '', description: '', image: null });
-  const [adminUseCamera, setAdminUseCamera] = useState(false);
   const [matchedItemDetails, setMatchedItemDetails] = useState(null);  // Matched item details
+  const [isCameraActive, setIsCameraActive] = useState(false);  // Control camera activation
+  const [isAdminCamera, setIsAdminCamera] = useState(false);    // Determine if admin or user camera
+  const [capturedFromCamera, setCapturedFromCamera] = useState(false); // Track if image captured from camera
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const [stream, setStream] = useState(null);
 
-  // Upload image to S3 and compare labels for user uploads
+  // Effect to stop the camera stream when component unmounts
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+
+  // Effect to start the camera after the video element is rendered
+  useEffect(() => {
+    if (isCameraActive && videoRef.current) {
+      startCamera();
+    }
+  }, [isCameraActive]);
+
+  // Function to handle starting the camera
+  const startCamera = async () => {
+    try {
+      const constraints = {
+        video: { facingMode: { exact: 'environment' } }  // Try to use back camera first
+      };
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.play();
+        setStream(mediaStream);
+      } else {
+        console.error("Video element not found.");
+      }
+    } catch (err) {
+      console.error("Error accessing the back camera, trying front camera: ", err);
+      fallbackToFrontCamera();
+    }
+  };
+
+  // Function to fallback to front camera if back camera is unavailable
+  const fallbackToFrontCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true }); // Use any available camera
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.play();
+        setStream(mediaStream);
+      } else {
+        console.error("Video element not found.");
+      }
+    } catch (fallbackErr) {
+      console.error("Error accessing the front camera as fallback: ", fallbackErr);
+    }
+  };
+
+  // Function to stop the camera
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setIsCameraActive(false);
+  };
+
+  // Function to capture image (used for both user and admin)
+  const captureImage = () => {
+    if (!videoRef.current) return;
+
+    const context = canvasRef.current.getContext('2d');
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+    
+    context.drawImage(videoRef.current, 0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight);
+    const capturedImage = canvasRef.current.toDataURL('image/jpeg');  // Ensure correct format
+
+    if (isAdminCamera) {
+      setNewItem({ ...newItem, image: capturedImage });
+    } else {
+      setImage(capturedImage);
+      setCapturedFromCamera(true);  // Track that the image was captured from the camera
+    }
+
+    stopCamera();
+  };
+
+  // Function to submit the captured image (acts like uploading the image)
+  const submitCapturedImage = async () => {
+    setLoading(true);  // Start showing "Processing"
+    setMatch(null);    // Reset previous match result if any
+    setDetectedLabels([]);  // Clear previous labels
+
+    try {
+      // Convert dataURL to a blob (similar to a file upload)
+      const response = await fetch(image);
+      const blob = await response.blob();
+
+      // Create a file from the blob
+      const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
+
+      // Upload the image
+      await uploadUserImageToS3(file);
+
+      // Start comparison with all admin images
+      const matchFound = await compareWithAllAdminImages(file);
+
+      // Detect labels in the uploaded user image
+      const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
+      setDetectedLabels(userLabels);
+
+      if (!matchFound) {
+        alert("No match found.");
+      }
+    } catch (error) {
+      console.error("Error processing image:", error);
+      alert("An error occurred while processing the image.");
+    } finally {
+      setLoading(false);  // Hide the processing screen
+    }
+  };
+
+  // Retake the captured image (reset the state and start the camera again)
+  const retakeImage = () => {
+    setImage(null);  // Clear the captured image
+    setCapturedFromCamera(false);  // Reset the capturedFromCamera state
+    setIsCameraActive(true);  // Restart the camera
+  };
+
+  // Function to handle image upload for the user
   const handleUserFileUpload = async (e) => {
     const file = e.target.files[0];
+    if (!file) return;
 
-    // Check if file type is JPEG or PNG
     if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
       alert('Only JPEG and PNG images are supported');
       return;
     }
 
-    setImage(URL.createObjectURL(file));  // Display uploaded image
+    setLoading(true);  // Start showing "Processing"
+    setImage(null);    // Clear previous image if any
+    setMatch(null);    // Reset previous match result if any
+    setDetectedLabels([]);  // Clear previous labels
 
-    // Upload user image to S3
-    await uploadUserImageToS3(file);
+    try {
+      // 1. Upload the user's image to S3
+      await uploadUserImageToS3(file);
 
-    // Detect labels for the user-uploaded image and compare with reference images in S3
-    const matchFound = await compareWithAllAdminImages(file);
-    
-    // Detect labels and store them for demo purposes
-    const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
-    setDetectedLabels(userLabels);
+      // 2. Start comparison with all admin images
+      const matchFound = await compareWithAllAdminImages(file);
 
-    if (!matchFound) {
-      alert("No match found.");  // Show alert if no match is found
-      setImage(null);  // Clear the uploaded image after no match is found
+      // 3. Detect labels in the uploaded user image
+      const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
+      setDetectedLabels(userLabels);
+
+      // 4. Handle match or no match results
+      if (matchFound) {
+        setImage(URL.createObjectURL(file));  // Set image if a match is found
+      } else {
+        alert("No match found.");  // Notify if no match is found
+      }
+    } catch (error) {
+      console.error("Error processing image:", error);
+      alert("An error occurred while processing the image.");
+    } finally {
+      setLoading(false);  // Hide the processing screen after all operations are done
     }
   };
 
-  // Upload the user's image to S3
+  // Helper function to upload user's image to S3
   const uploadUserImageToS3 = async (file) => {
-    setLoading(true);
     try {
       const uploadParams = {
         Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
-        Key: `user-uploads/${file.name}`,  // Store user image in user-uploads folder
+        Key: `user-uploads/${file.name}`,
         Body: file,
-        ContentType: file.type  // Ensure correct content type (important for Rekognition)
+        ContentType: file.type
       };
       const command = new PutObjectCommand(uploadParams);
       await s3.send(command);
-      console.log(`Successfully uploaded user image: ${file.name}`);
+      console.log(`Uploaded user image: ${file.name}`);
     } catch (error) {
-      console.error("Error uploading user image to S3: ", error);
-    }
-    setLoading(false);
-  };
-
-  // List all admin images in the S3 bucket and compare against the user-uploaded image
-  const compareWithAllAdminImages = async (file) => {
-    setLoading(true);
-    let matchFound = false;  // Flag to track if a match is found
-
-    try {
-      // List all objects (images) in the 'admin/' folder
-      const listParams = {
-        Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
-        Prefix: 'admin/'  // Only list objects in the 'admin/' folder
-      };
-
-      const listCommand = new ListObjectsV2Command(listParams);
-      const response = await s3.send(listCommand);
-
-      if (response.Contents && response.Contents.length > 0) {
-        // Loop through each image in the 'admin/' folder and compare it with the user-uploaded image
-        for (const adminImage of response.Contents) {
-          const adminImageKey = adminImage.Key;
-
-          // Detect labels in the admin image
-          const adminLabels = await detectLabelsInImage(adminImageKey);
-
-          // Detect labels in the user-uploaded image
-          const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
-
-          // Compare labels between the user and admin images
-          if (compareLabels(userLabels, adminLabels)) {
-            console.log("Labels match with:", adminImageKey);
-            
-            // If a match is found, fetch the item details from DynamoDB
-            await fetchMatchedItemDetails(adminImageKey);
-            matchFound = true;  // Set the flag to true
-            break;  // Exit loop after first match
-          }
-        }
-      } else {
-        console.log("No images found in the admin folder.");
-        setMatch(null);
-      }
-    } catch (error) {
-      console.error("Error listing admin images or comparing labels: ", error);
-    }
-    setLoading(false);
-
-    return matchFound;  // Return whether a match was found or not
-  };
-
-  // Detect labels in an image using Rekognition
-  const detectLabelsInImage = async (imageKey) => {
-    const detectParams = {
-      Image: {
-        S3Object: {
-          Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
-          Name: imageKey
-        }
-      },
-      MaxLabels: 10,  // Adjust the number of labels detected if necessary
-      MinConfidence: 70  // Minimum confidence for detected labels
-    };
-  
-    try {
-      const command = new DetectLabelsCommand(detectParams);
-      const response = await rekognition.send(command);
-      const labels = response.Labels.map(label => label.Name);
-      console.log(`Detected labels for ${imageKey}:`, labels);
-      return labels;
-    } catch (error) {
-      // Handle InvalidImageFormatException silently
-      if (error.name === 'InvalidImageFormatException') {
-        console.warn("Silent: Invalid image format. Ignoring this error for the demo.");
-        return [];
-      } 
-      
-      // Handle 400 Bad Request silently
-      if (error.$metadata && error.$metadata.httpStatusCode === 400) {
-        console.warn("Silent: 400 Bad Request from Rekognition API. Ignoring this error for the demo.");
-        return [];
-      }
-  
-      // Log any other errors that aren't explicitly handled
-      console.error("Error detecting labels:", error);
-      return [];
+      console.error("Error uploading image to S3: ", error);
     }
   };
 
-  // Compare the labels from two images
-  const compareLabels = (userLabels, adminLabels) => {
-    const commonLabels = userLabels.filter(label => adminLabels.includes(label));
-    return commonLabels.length > 0;  // Return true if there's at least one matching label
-  };
-
-  // Fetch the matched item details from DynamoDB
-  const fetchMatchedItemDetails = async (matchedItemID) => {
-    const itemParams = {
-      TableName: "LostItems",  // Your DynamoDB table name
-      Key: {
-        "ItemID": { S: matchedItemID.split('/').pop() }  // Extract the ItemID from the image key
-      }
-    };
-
-    const command = new GetItemCommand(itemParams);
-    try {
-      const data = await dynamoDb.send(command);
-      if (data.Item) {
-        setMatchedItemDetails({
-          name: data.Item.Name.S,
-          description: data.Item.Description.S,
-          location: data.Item.Location.S,
-          imageUrl: data.Item.ImageUrl.S  // Matched image from S3
-        });
-        setMatch(true);  // Match found
-      } else {
-        alert("No details found for this item.");
-        setMatch(null);
-      }
-    } catch (error) {
-      console.error("Error retrieving item metadata: ", error);
-    }
-  };
-
-  // Admin mode: Handle file upload for new lost item
+  // Handle admin file upload
   const handleAdminFileUpload = async (e) => {
     const file = e.target.files[0];
+    if (!file) return;
+
     setNewItem({ ...newItem, image: URL.createObjectURL(file) });
-    await uploadAdminImageToS3(file);  // Upload admin image to S3
+    await uploadAdminImageToS3(file);
   };
 
-  // Upload the admin's image to S3 and store metadata in DynamoDB
+  // Helper function to upload admin's image to S3 and store metadata in DynamoDB
   const uploadAdminImageToS3 = async (file) => {
     setLoading(true);
     try {
@@ -226,7 +244,7 @@ function App() {
         Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
         Key: `admin/${file.name}`,  // Store admin image in the admin folder
         Body: file,
-        ContentType: file.type  // Ensure correct content type
+        ContentType: file.type
       };
       const command = new PutObjectCommand(uploadParams);
       await s3.send(command);
@@ -253,40 +271,126 @@ function App() {
     setLoading(false);
   };
 
-  const startAdminCamera = () => {
-    setAdminUseCamera(true);
-    const constraints = {
-      video: { facingMode: { exact: 'environment' } }
+  // Function to compare user image with admin images
+  const compareWithAllAdminImages = async (file) => {
+    let matchFound = false;
+    try {
+      const listParams = {
+        Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
+        Prefix: 'admin/'  // Only list objects in the admin folder
+      };
+
+      const listCommand = new ListObjectsV2Command(listParams);
+      const response = await s3.send(listCommand);
+
+      if (response.Contents && response.Contents.length > 0) {
+        for (const adminImage of response.Contents) {
+          const adminImageKey = adminImage.Key;
+
+          // Detect labels in the admin image
+          const adminLabels = await detectLabelsInImage(adminImageKey);
+
+          // Detect labels in the user-uploaded image
+          const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
+
+          // Compare labels between user and admin images
+          if (compareLabels(userLabels, adminLabels)) {
+            console.log("Labels match with:", adminImageKey);
+            await fetchMatchedItemDetails(adminImageKey);
+            matchFound = true;
+            break;
+          }
+        }
+      } else {
+        console.log("No images found in the admin folder.");
+        setMatch(false);
+      }
+    } catch (error) {
+      console.error("Error comparing images:", error);
+    }
+    return matchFound;
+  };
+
+  // Function to detect labels in images using Rekognition
+  const detectLabelsInImage = async (imageKey) => {
+    const detectParams = {
+      Image: {
+        S3Object: {
+          Bucket: process.env.REACT_APP_AWS_BUCKET_NAME,
+          Name: imageKey
+        }
+      },
+      MaxLabels: 3,
+      MinConfidence: 70
     };
 
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then((stream) => {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      })
-      .catch((err) => {
-        console.error("Error accessing the camera: ", err);
-      });
-  };
-
-  const captureAdminImage = () => {
-    const context = canvasRef.current.getContext('2d');
-    context.drawImage(videoRef.current, 0, 0, 640, 480);
-    const capturedImage = canvasRef.current.toDataURL('image/jpeg');  // Ensure correct format
-    setNewItem({ ...newItem, image: capturedImage });
-    stopCamera();
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+    try {
+      const command = new DetectLabelsCommand(detectParams);
+      const response = await rekognition.send(command);
+      const labels = response.Labels.map(label => label.Name);
+      return labels;
+    } catch (error) {
+      console.error("Error detecting labels:", error);
+      return [];
     }
-    setAdminUseCamera(false);
+  };
+
+  // Function to compare labels between user and admin images
+  const compareLabels = (userLabels, adminLabels) => {
+    const commonLabels = userLabels.filter(label => adminLabels.includes(label));
+    return commonLabels.length > 0;  // Return true if there's at least one matching label
+  };
+
+  // Function to fetch matched item details from DynamoDB
+  const fetchMatchedItemDetails = async (matchedItemID) => {
+    const itemParams = {
+      TableName: "LostItems",
+      Key: {
+        "ItemID": { S: matchedItemID.split('/').pop() }  // Extract the ItemID from the image key
+      }
+    };
+
+    const command = new GetItemCommand(itemParams);
+    try {
+      const data = await dynamoDb.send(command);
+      if (data.Item) {
+        console.log("Matched Item Details: ", data.Item);
+        
+        setMatchedItemDetails({
+          name: data.Item.Name.S,
+          description: data.Item.Description.S,
+          location: data.Item.Location.S,
+          imageUrl: data.Item.ImageUrl.S  // Matched image from S3
+        });
+        setMatch(true);  // Match found
+      } else {
+        console.log("No details found for this item.");
+        setMatch(false);
+      }
+    } catch (error) {
+      console.error("Error fetching matched item details:", error);
+      setMatch(false);  // Ensure match is set to false on error
+    }
   };
 
   // Toggle Admin/User mode
   const toggleAdminMode = () => {
     setAdminMode(!adminMode);
+    setIsCameraActive(false);
+    setIsAdminCamera(false);
+    stopCamera();
+  };
+
+  // Handle starting the camera for user
+  const handleUserCamera = () => {
+    setIsAdminCamera(false);
+    setIsCameraActive(true);
+  };
+
+  // Handle starting the camera for admin
+  const handleAdminCamera = () => {
+    setIsAdminCamera(true);
+    setIsCameraActive(true);
   };
 
   // Reset the match result and labels when returning to main menu
@@ -294,6 +398,8 @@ function App() {
     setMatch(null);
     setImage(null);
     setMatchedItemDetails(null);
+    setDetectedLabels([]);
+    setCapturedFromCamera(false);
   };
 
   return (
@@ -302,29 +408,25 @@ function App() {
       <h1>Lost and Found</h1>
 
       <div>
-        {/* Button to toggle between Admin and User mode */}
         <button onClick={toggleAdminMode}>
           {adminMode ? "Switch to User Mode" : "Switch to Admin Mode"}
         </button>
 
-        {/* User mode */}
         {!adminMode && (
           <div>
             <button onClick={() => document.getElementById('fileInput').click()}>Upload Image</button>
-            <button onClick={startAdminCamera}>Use Camera</button>
+            <button onClick={handleUserCamera}>Use Camera</button>
           </div>
         )}
 
-        {/* File input for user search */}
         <input
           id="fileInput"
           type="file"
-          accept="image/jpeg, image/png"  // Ensure only valid image formats can be selected
+          accept="image/jpeg, image/png"
           onChange={handleUserFileUpload}
           style={{ display: 'none' }}
         />
 
-        {/* Admin mode */}
         {adminMode && (
           <div>
             <h2>Add New Lost Item</h2>
@@ -350,40 +452,57 @@ function App() {
             <input
               id="adminFileInput"
               type="file"
-              accept="image/jpeg, image/png"  // Ensure only valid image formats
+              accept="image/jpeg, image/png"
               onChange={handleAdminFileUpload}
               style={{ display: 'none' }}
             />
-            {adminUseCamera && (
-              <div className="flex-container">
-                <video ref={videoRef} width="100%" height="auto" playsInline autoPlay></video>
-                <button onClick={captureAdminImage}>Capture Image</button>
-                <button onClick={stopCamera}>Cancel</button>
-              </div>
-            )}
+            <button onClick={handleAdminCamera}>Use Camera</button>
+          </div>
+        )}
+
+        {isCameraActive && (
+          <div className="flex-container">
+            <video ref={videoRef} width="100%" height="auto" playsInline autoPlay></video>
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+            <button onClick={captureImage}>Capture Image</button>
+            <button onClick={stopCamera}>Cancel</button>
+          </div>
+        )}
+
+        {/* Show captured image and buttons if captured from camera */}
+        {capturedFromCamera && (
+          <div>
+            <h3>Captured Image:</h3>
+            <img src={image} alt="Captured" width="300" />
+            <button onClick={submitCapturedImage}>Submit Image</button>
+            <button onClick={retakeImage}>Retake Image</button>
           </div>
         )}
 
         {loading && <p>Processing...</p>}
 
-        {/* Show user's uploaded image */}
-        {image && !loading && <img src={image} alt="Uploaded" width="300" />}
+        {!loading && (
+          <>
+            {image && !capturedFromCamera && (
+              <div>
+                <h3>Your Uploaded Image:</h3>
+                <img src={image} alt="Uploaded" width="300" />
+              </div>
+            )}
 
-        {/* Display match result */}
-        {match && matchedItemDetails && (
-          <div>
-            <h2>Item Found!</h2>
-            <p><strong>Name:</strong> {matchedItemDetails.name}</p>
-            <p><strong>Location:</strong> {matchedItemDetails.location}</p>
-            <p><strong>Description:</strong> {matchedItemDetails.description}</p>
-            <img src={matchedItemDetails.imageUrl} alt="Matched Item" width="300" />
-            <h3>Your uploaded item:</h3>
-            <img src={image} alt="Uploaded" width="300" />
-            <button onClick={handleReturnToMainMenu}>Return to Main Menu</button>
-          </div>
+            {match && matchedItemDetails && (
+              <div>
+                <h2>Item Found!</h2>
+                <p><strong>Name:</strong> {matchedItemDetails.name}</p>
+                <p><strong>Location:</strong> {matchedItemDetails.location}</p>
+                <p><strong>Description:</strong> {matchedItemDetails.description}</p>
+                <img src={matchedItemDetails.imageUrl} alt="Matched Item" width="300" />
+                <button onClick={handleReturnToMainMenu}>Return to Main Menu</button>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Display detected labels below the main buttons */}
         {detectedLabels.length > 0 && (
           <div>
             <h3>Detected Labels (Previous Upload):</h3>

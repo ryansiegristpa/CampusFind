@@ -1,7 +1,9 @@
 /* Global styling */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&family=Roboto:wght@300;400&display=swap');
+
 body {
-  font-family: 'Arial', sans-serif;
-  background-color: #f4f4f9;
+  font-family: 'Roboto', sans-serif;
+  background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -15,46 +17,81 @@ body {
 :root {
   --lehigh-brown: #4e3629;
   --lehigh-gold: #b3995d;
+  --light-gold: #d4b57b;
+  --dark-brown: #3b2a21;
 }
 
+/* App container styling */
 .App {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   text-align: center;
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
+  background-color: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  padding: 2rem 3rem;
   max-width: 400px;
   width: 100%;
+  margin: 0 auto;
+  transition: transform 0.3s ease-in-out;
+}
+
+.App:hover {
+  transform: translateY(-5px);
 }
 
 /* Lehigh logo styling */
 .logo {
-  width: 150px;
-  margin-bottom: 20px;
+  width: 300px; /* Increase the size from 150px to 200px or any desired size */
+  height: auto; /* Keep the height proportional to the width */
+  margin-bottom: 10px;
 }
+
 
 /* Heading styling */
 h1 {
-  font-size: 1.8rem;
+  font-family: 'Poppins', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
   color: var(--lehigh-brown);
-  margin-bottom: 1.5rem;
+  margin-top: 0; /* Remove any top margin */
+  margin-bottom: 1rem; /* Optional: reduce bottom margin if needed */
+  letter-spacing: 1px;
+}
+
+/* Button container styling */
+button-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 /* Button styling */
 button {
-  background-color: var(--lehigh-gold);
-  color: var(--lehigh-brown);
+  background: linear-gradient(135deg, var(--light-gold), var(--lehigh-gold));
+  color: white;
   border: none;
-  padding: 12px 20px;
-  margin: 10px;
-  border-radius: 8px;
+  padding: 14px 24px;
+  margin: 10px auto;
+  border-radius: 10px;
+  font-family: 'Poppins', sans-serif;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 button:hover {
-  background-color: #927a43;
+  background: linear-gradient(135deg, var(--lehigh-gold), var(--dark-brown));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
 }
 
 button:focus {
@@ -79,8 +116,9 @@ img {
 }
 
 h2 {
-  color: var(--lehigh-brown);
-  font-size: 1.5rem;
+  font-family: 'Poppins', sans-serif;
+  color: var(--dark-brown);
+  font-size: 1.6rem;
   margin-top: 1.5rem;
 }
 
@@ -151,18 +189,20 @@ video {
 
 .admin-form button {
   background-color: var(--lehigh-gold);
-  color: var(--lehigh-brown);
+  color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 24px;
   font-size: 16px;
   cursor: pointer;
   margin-top: 10px;
-  border-radius: 5px;
+  border-radius: 10px;
   transition: background-color 0.3s ease;
 }
 
 .admin-form button:hover {
   background-color: #927a43;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
 }
 
 .admin-form button:focus {
@@ -175,7 +215,7 @@ video {
   max-width: 500px;
   margin: 0 auto;
   padding: 20px;
-  background-color: #f4f4f9;
+  background-color: #fff;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -187,8 +227,11 @@ video {
   margin-bottom: 20px;
 }
 
-/* Button full width on mobile */
-button {
-  display: block;
-  width: 100%;
+/* Ensure the uploaded image fits within the container */
+img.uploaded-image {
+  max-width: 100%;  /* Ensure image does not overflow its container */
+  height: auto;     /* Maintain the aspect ratio */
+  object-fit: contain; /* Fit image within the box without cropping */
+  border-radius: 8px;
+  margin-top: 1rem;
 }
