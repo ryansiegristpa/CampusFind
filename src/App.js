@@ -130,38 +130,40 @@ function App() {
 
   // Function to submit the captured image (acts like uploading the image)
   const submitCapturedImage = async () => {
-    setLoading(true);  // Start showing "Processing"
-    setMatch(null);    // Reset previous match result if any
+    setLoading(true);  // Show "Processing..."
+    setMatch(null);    // Reset previous match result
     setDetectedLabels([]);  // Clear previous labels
-
+  
     try {
-      // Convert dataURL to a blob (similar to a file upload)
+      // Convert dataURL to a blob (image from camera)
       const response = await fetch(image);
       const blob = await response.blob();
-
+  
       // Create a file from the blob
       const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
-
-      // Upload the image
+  
+      // 1. Upload the captured image to S3
       await uploadUserImageToS3(file);
-
-      // Start comparison with all admin images
+  
+      // 2. Start comparison with admin images
       const matchFound = await compareWithAllAdminImages(file);
-
-      // Detect labels in the uploaded user image
+  
+      // 3. Detect labels in the uploaded image
       const userLabels = await detectLabelsInImage(`user-uploads/${file.name}`);
       setDetectedLabels(userLabels);
-
+  
+      // 4. Handle match result
       if (!matchFound) {
-        alert("No match found.");
+        alert("No match found.");  // Show "No match found" if there's no match
       }
     } catch (error) {
       console.error("Error processing image:", error);
       alert("An error occurred while processing the image.");
     } finally {
-      setLoading(false);  // Hide the processing screen
+      setLoading(false);  // Hide "Processing..." when done
     }
   };
+  
 
   // Retake the captured image (reset the state and start the camera again)
   const retakeImage = () => {
