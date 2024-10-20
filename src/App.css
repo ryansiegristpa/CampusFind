@@ -34,8 +34,9 @@ body {
   padding: 2rem 3rem;
   max-width: 400px;
   width: 100%;
-  margin: 0 auto;
+  margin: 0 auto;  /* Ensures horizontal centering */
   transition: transform 0.3s ease-in-out;
+  box-sizing: border-box;  /* Ensures padding and borders are included in the width */
 }
 
 .App:hover {
@@ -53,7 +54,7 @@ body {
 /* Heading styling */
 h1 {
   font-family: 'Poppins', sans-serif;
-  font-size: 2rem;
+  font-size: 3rem;
   font-weight: 700;
   color: var(--lehigh-brown);
   margin-top: 0; /* Remove any top margin */
@@ -146,6 +147,7 @@ canvas {
 @media (max-width: 768px) {
   .App {
     padding: 1rem;
+    margin: 0 1rem;  /* Add horizontal margin to prevent overflow */
   }
 
   h1 {

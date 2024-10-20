@@ -405,7 +405,7 @@ function App() {
   return (
     <div className="App">
       <img src="/images/hawkfind-logo.png" alt="HawkFind Logo" className="logo" />
-      <h1>Lost and Found</h1>
+      <h1>HawkFind</h1>
 
       <div>
         <button onClick={toggleAdminMode}>
